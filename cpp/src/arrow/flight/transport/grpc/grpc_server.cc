@@ -28,6 +28,9 @@
 #include "arrow/util/config.h"
 #ifdef GRPCPP_PP_INCLUDE
 #include <grpcpp/grpcpp.h>
+#include <grpcpp/ext/proto_server_reflection_plugin.h>
+#include <grpcpp/health_check_service_interface.h>
+
 #else
 #include <grpc++/grpc++.h>
 #endif
@@ -532,6 +535,9 @@ class GrpcServerTransport : public internal::ServerTransport {
               const arrow::internal::Uri& uri) override {
     grpc_service_.reset(
         new GrpcServiceHandler(options.auth_handler, options.middleware, this));
+
+    ::grpc::EnableDefaultHealthCheckService(true);
+    ::grpc::reflection::InitProtoReflectionServerBuilderPlugin();
 
     ::grpc::ServerBuilder builder;
     // Allow uploading messages of any length
