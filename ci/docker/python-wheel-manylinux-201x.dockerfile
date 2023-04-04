@@ -77,7 +77,7 @@ RUN vcpkg install \
         --x-feature=json \
         --x-feature=parquet
 
-ARG python=3.8
+ARG python=3.10
 ENV PYTHON_VERSION=${python}
 RUN PYTHON_ROOT=$(find /opt/python -name cp${PYTHON_VERSION/./}-*) && \
     echo "export PATH=$PYTHON_ROOT/bin:\$PATH" >> /etc/profile.d/python.sh
