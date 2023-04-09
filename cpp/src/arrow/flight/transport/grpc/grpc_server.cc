@@ -536,8 +536,8 @@ class GrpcServerTransport : public internal::ServerTransport {
     grpc_service_.reset(
         new GrpcServiceHandler(options.auth_handler, options.middleware, this));
 
-    ::grpc::EnableDefaultHealthCheckService(true);
     ::grpc::reflection::InitProtoReflectionServerBuilderPlugin();
+    ::grpc::EnableDefaultHealthCheckService(true);
 
     ::grpc::ServerBuilder builder;
     // Allow uploading messages of any length
