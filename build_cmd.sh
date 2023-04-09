@@ -29,5 +29,15 @@ popd
 
 pushd python
 python3 setup.py build_ext --inplace --with-parquet --with-dataset --with-flight --with-orc --with-gandiva --bundle-cython-cpp --bundle-arrow-cpp
+
 pip3 install .
+pip install wheel
+python3 setup.py build_ext --build-type=$ARROW_BUILD_TYPE \
+        --with-parquet --with-dataset --with-flight --with-orc --with-gandiva --bundle-cython-cpp --bundle-arrow-cpp \
+        --bundle-arrow-cpp bdist_wheel
 popd
+
+
+# For building wheel
+ARCH=amd64 PYTHON=3.10 docker-compose build python-wheel-manylinux-2014
+ARCH=amd64 PYTHON=3.10 docker-compose run python-wheel-manylinux-2014

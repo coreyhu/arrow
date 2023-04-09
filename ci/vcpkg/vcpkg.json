@@ -52,7 +52,10 @@
       "dependencies": [
         "abseil",
         "c-ares",
-        "grpc",
+        {
+          "name": "grpc",
+          "features": [ "codegen" ]
+        },
         "protobuf",
         "sqlite3"
       ]
