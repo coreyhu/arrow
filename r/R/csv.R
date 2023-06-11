@@ -216,7 +216,7 @@ read_delim_arrow <- function(file,
 
   if (!inherits(file, "InputStream")) {
     compression <- detect_compression(file)
-    file <- make_readable_file(file)
+    file <- make_readable_file(file, random_access = FALSE)
     if (compression != "uncompressed") {
       # TODO: accept compression and compression_level as args
       file <- CompressedInputStream$create(file, compression)
@@ -248,7 +248,7 @@ read_delim_arrow <- function(file,
   }
 
   if (isTRUE(as_data_frame)) {
-    tab <- as.data.frame(tab)
+    tab <- collect.ArrowTabular(tab)
   }
 
   tab
@@ -464,10 +464,25 @@ CsvTableReader$create <- function(file,
 CsvReadOptions <- R6Class("CsvReadOptions",
   inherit = ArrowObject,
   public = list(
-    encoding = NULL
+    encoding = NULL,
+    print = function(...) {
+      cat("CsvReadOptions\n")
+      for (attr in c(
+        "column_names", "block_size", "skip_rows", "autogenerate_column_names",
+        "use_threads", "skip_rows_after_names", "encoding"
+      )) {
+        cat(sprintf("%s: %s\n", attr, self[[attr]]))
+      }
+      invisible(self)
+    }
   ),
   active = list(
-    column_names = function() csv___ReadOptions__column_names(self)
+    column_names = function() csv___ReadOptions__column_names(self),
+    block_size = function() csv___ReadOptions__block_size(self),
+    skip_rows = function() csv___ReadOptions__skip_rows(self),
+    autogenerate_column_names = function() csv___ReadOptions__autogenerate_column_names(self),
+    use_threads = function() csv___ReadOptions__use_threads(self),
+    skip_rows_after_names = function() csv___ReadOptions__skip_rows_after_names(self)
   )
 )
 CsvReadOptions$create <- function(use_threads = option_use_threads(),
@@ -491,6 +506,7 @@ CsvReadOptions$create <- function(use_threads = option_use_threads(),
   )
 
   options$encoding <- encoding
+
   options
 }
 

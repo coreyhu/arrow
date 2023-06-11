@@ -140,6 +140,22 @@ test_that("Schema modification", {
   expect_error(schm[[c(2, 4)]] <- int32(), "length(i) not equal to 1", fixed = TRUE)
 })
 
+test_that("Metadata can be reassigned as a whole", {
+  schm <- schema(b = double(), c = string(), d = int8())
+
+  # Check named character vector
+  schm$metadata <- c("foo" = "bar")
+  expect_identical(schm$metadata, list(foo = "bar"))
+
+  # Check list()
+  schm$metadata <- list("foo" = "bar")
+  expect_identical(schm$metadata, list(foo = "bar"))
+
+  # Check NULL for removal
+  schm$metadata <- NULL
+  expect_identical(schm$metadata, set_names(list(), character()))
+})
+
 test_that("Metadata is preserved when modifying Schema", {
   schm <- schema(b = double(), c = string(), d = int8())
   schm$metadata$foo <- "bar"
@@ -259,4 +275,20 @@ test_that("as_schema() works for Schema objects", {
 test_that("as_schema() works for StructType objects", {
   struct_type <- struct(col1 = int32())
   expect_equal(as_schema(struct_type), schema(col1 = int32()))
+})
+
+test_that("schema name assignment", {
+  schm <- schema(x = int8(), y = string(), z = double())
+  expect_identical(names(schm), c("x", "y", "z"))
+  names(schm) <- c("a", "b", "c")
+  expect_identical(names(schm), c("a", "b", "c"))
+  expect_error(names(schm) <- "f", regexp = "Replacement names must contain same number of items as current names")
+  expect_error(names(schm) <- NULL, regexp = "Replacement names must be character vector, not NULL")
+
+  # Test that R metadata is updated appropriately
+  df <- data.frame(x = 1:3, y = c("a", "b", "c"))
+  schm2 <- arrow_table(df)$schema
+  names(schm2) <- c("col1", "col2")
+  expect_identical(names(schm2), c("col1", "col2"))
+  expect_identical(names(schm2$r_metadata$columns), c("col1", "col2"))
 })

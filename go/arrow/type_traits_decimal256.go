@@ -20,8 +20,8 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/apache/arrow/go/v12/arrow/decimal256"
-	"github.com/apache/arrow/go/v12/arrow/endian"
+	"github.com/apache/arrow/go/v13/arrow/decimal256"
+	"github.com/apache/arrow/go/v13/arrow/endian"
 )
 
 // Decimal256 traits
@@ -59,7 +59,7 @@ func (decimal256Traits) CastToBytes(b []decimal256.Num) []byte {
 	h := (*reflect.SliceHeader)(unsafe.Pointer(&b))
 
 	var res []byte
-	s := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+	s := (*reflect.SliceHeader)(unsafe.Pointer(&res))
 	s.Data = h.Data
 	s.Len = h.Len * Decimal256SizeBytes
 	s.Cap = h.Cap * Decimal256SizeBytes

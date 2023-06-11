@@ -25,14 +25,15 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/apache/arrow/go/v12/arrow"
-	"github.com/apache/arrow/go/v12/arrow/bitutil"
-	"github.com/apache/arrow/go/v12/arrow/decimal128"
-	"github.com/apache/arrow/go/v12/arrow/float16"
-	"github.com/apache/arrow/go/v12/arrow/internal/debug"
-	"github.com/apache/arrow/go/v12/arrow/memory"
-	"github.com/apache/arrow/go/v12/internal/hashing"
-	"github.com/apache/arrow/go/v12/internal/utils"
+	"github.com/apache/arrow/go/v13/arrow"
+	"github.com/apache/arrow/go/v13/arrow/bitutil"
+	"github.com/apache/arrow/go/v13/arrow/decimal128"
+	"github.com/apache/arrow/go/v13/arrow/decimal256"
+	"github.com/apache/arrow/go/v13/arrow/float16"
+	"github.com/apache/arrow/go/v13/arrow/internal/debug"
+	"github.com/apache/arrow/go/v13/arrow/memory"
+	"github.com/apache/arrow/go/v13/internal/hashing"
+	"github.com/apache/arrow/go/v13/internal/utils"
 	"github.com/goccy/go-json"
 )
 
@@ -45,12 +46,12 @@ import (
 //
 // For example, the array:
 //
-//      ["foo", "bar", "foo", "bar", "foo", "bar"]
+//	["foo", "bar", "foo", "bar", "foo", "bar"]
 //
 // with dictionary ["bar", "foo"], would have the representation of:
 //
-//      indices: [1, 0, 1, 0, 1, 0]
-//      dictionary: ["bar", "foo"]
+//	indices: [1, 0, 1, 0, 1, 0]
+//	dictionary: ["bar", "foo"]
 //
 // The indices in principle may be any integer type.
 type Dictionary struct {
@@ -253,6 +254,13 @@ func (d *Dictionary) CanCompareIndices(other *Dictionary) bool {
 	return ArraySliceEqual(d.Dictionary(), 0, minlen, other.Dictionary(), 0, minlen)
 }
 
+func (d *Dictionary) ValueStr(i int) string {
+	if d.IsNull(i) {
+		return NullValueStr
+	}
+	return d.Dictionary().ValueStr(d.GetValueIndex(i))
+}
+
 func (d *Dictionary) String() string {
 	return fmt.Sprintf("{ dictionary: %v\n  indices: %v }", d.Dictionary(), d.Indices())
 }
@@ -286,7 +294,7 @@ func (d *Dictionary) GetOneForMarshal(i int) interface{} {
 		return nil
 	}
 	vidx := d.GetValueIndex(i)
-	return d.Dictionary().(arraymarshal).GetOneForMarshal(vidx)
+	return d.Dictionary().GetOneForMarshal(vidx)
 }
 
 func (d *Dictionary) MarshalJSON() ([]byte, error) {
@@ -709,7 +717,6 @@ func (b *dictionaryBuilder) ResetFull() {
 
 func (b *dictionaryBuilder) Cap() int { return b.idxBuilder.Cap() }
 
-// UnmarshalJSON is not yet implemented for dictionary builders and will always error.
 func (b *dictionaryBuilder) UnmarshalJSON(data []byte) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	t, err := dec.Token()
@@ -737,8 +744,30 @@ func (b *dictionaryBuilder) Unmarshal(dec *json.Decoder) error {
 	return b.AppendArray(arr)
 }
 
+func (b *dictionaryBuilder) AppendValueFromString(s string) error {
+	bldr := NewBuilder(b.mem, b.dt.ValueType)
+	defer bldr.Release()
+
+	if err := bldr.AppendValueFromString(s); err != nil {
+		return err
+	}
+
+	arr := bldr.NewArray()
+	defer arr.Release()
+	return b.AppendArray(arr)
+}
+
 func (b *dictionaryBuilder) UnmarshalOne(dec *json.Decoder) error {
-	return errors.New("unmarshal json to dictionary not yet implemented")
+	bldr := NewBuilder(b.mem, b.dt.ValueType)
+	defer bldr.Release()
+
+	if err := bldr.UnmarshalOne(dec); err != nil {
+		return err
+	}
+
+	arr := bldr.NewArray()
+	defer arr.Release()
+	return b.AppendArray(arr)
 }
 
 func (b *dictionaryBuilder) NewArray() arrow.Array {
@@ -854,6 +883,11 @@ func getvalFn(arr arrow.Array) func(i int) interface{} {
 		return func(i int) interface{} {
 			val := typedarr.Value(i)
 			return (*(*[arrow.Decimal128SizeBytes]byte)(unsafe.Pointer(&val)))[:]
+		}
+	case *Decimal256:
+		return func(i int) interface{} {
+			val := typedarr.Value(i)
+			return (*(*[arrow.Decimal256SizeBytes]byte)(unsafe.Pointer(&val)))[:]
 		}
 	case *DayTimeInterval:
 		return func(i int) interface{} {
@@ -1265,6 +1299,41 @@ func (b *BinaryDictionaryBuilder) InsertStringDictValues(arr *String) (err error
 	return
 }
 
+func (b *BinaryDictionaryBuilder) GetValueIndex(i int) int {
+	switch b := b.idxBuilder.Builder.(type) {
+	case *Uint8Builder:
+		return int(b.Value(i))
+	case *Int8Builder:
+		return int(b.Value(i))
+	case *Uint16Builder:
+		return int(b.Value(i))
+	case *Int16Builder:
+		return int(b.Value(i))
+	case *Uint32Builder:
+		return int(b.Value(i))
+	case *Int32Builder:
+		return int(b.Value(i))
+	case *Uint64Builder:
+		return int(b.Value(i))
+	case *Int64Builder:
+		return int(b.Value(i))
+	default:
+		return -1
+	}
+}
+
+func (b *BinaryDictionaryBuilder) Value(i int) []byte {
+	switch mt := b.memoTable.(type) {
+	case *hashing.BinaryMemoTable:
+		return mt.Value(i)
+	}
+	return nil
+}
+
+func (b *BinaryDictionaryBuilder) ValueStr(i int) string {
+	return string(b.Value(i))
+}
+
 type FixedSizeBinaryDictionaryBuilder struct {
 	dictionaryBuilder
 	byteWidth int
@@ -1310,7 +1379,7 @@ type Decimal256DictionaryBuilder struct {
 	dictionaryBuilder
 }
 
-func (b *Decimal256DictionaryBuilder) Append(v decimal128.Num) error {
+func (b *Decimal256DictionaryBuilder) Append(v decimal256.Num) error {
 	return b.appendValue((*(*[arrow.Decimal256SizeBytes]byte)(unsafe.Pointer(&v)))[:])
 }
 func (b *Decimal256DictionaryBuilder) InsertDictValues(arr *Decimal256) (err error) {
@@ -1553,7 +1622,7 @@ func (u *unifier) GetResultWithIndexType(indexType arrow.DataType) (arrow.Array,
 	case arrow.INT16:
 		toobig = dictLen > math.MaxInt16
 	case arrow.UINT32:
-		toobig = dictLen > math.MaxUint32
+		toobig = uint(dictLen) > math.MaxUint32
 	case arrow.INT32:
 		toobig = dictLen > math.MaxInt32
 	case arrow.UINT64:
